@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en" style="width:100%; height: 100%;">
+
+<head>
+    <meta charset="UTF-8">
+    <title>发布会签到</title>
+    <style>
+        body {
+            margin: 0;
+            height: 100%;
+        }
+
+        #main {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            display: -webkit-flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #info {
+
+            width: 62%;
+            height: 62%;
+
+            display: flex;
+            display: -webkit-flex;
+            flex-direction: row;
+            justify-content: center;
+            align-items: center;
+            background: #fbf6ee;
+            align-content: space-around;
+        }
+
+        .vec {
+            display: flex;
+            display: -webkit-flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        li {
+            list-style-type: none;
+            margin: 20px auto 20px auto;
+        }
+
+        .cata {
+            width: 20%;
+            text-align: right;
+            font-style: oblique;
+            font-size: 1.6em;
+        }
+
+        .content {
+            width: 75%;
+            text-align: center;
+            font-size: 1.4em;
+        }
+
+        .form-control {
+            display: none;
+        }
+
+        #status {
+            position: absolute;
+            left: 300px;
+            bottom: 60px;
+            font-size: 1.7em;
+            color: deeppink;
+        }
+
+        #extra {
+            position: absolute;
+            right: 300px;
+            bottom: 60px;
+        }
+
+        #extra button {
+            border: 1px solid transparent;
+            color: #fff;
+            padding: .375rem .75rem;
+            background-color: #6c757d;
+            font-weight: 400;
+            font-size: 1.6em;
+            white-space: nowrap;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        .mobile {
+            position: absolute;
+            top: 26%;
+            left: 29%;
+            font-size: 30px;
+        }
+
+        .mobile input {
+            width: 220px;
+            height: 34px;
+            font-size: 30px;
+        }
+        .signed {
+            font-size: 30px;
+        }
+        #signedNumber {
+            font-size: 30px;
+        }
+    </style>
+</head>
+
+<body>
+<div class="signed">
+    当前签到人数: &nbsp;&nbsp;&nbsp;<input type="text" id="signedNumber" value="0" style="border:none;" disabled="disabled">
+</div>
+<div class="mobile">
+    手机号: &nbsp;&nbsp;&nbsp;<input type="text" id="work_number"/>
+</div>
+<div id="main">
+    <div id="info">
+        <div class="cata">
+            <ol>
+                <li>姓 名</li>
+                <li>公 司</li>
+                <li>手机号</li>
+                <li>备 注</li>
+            </ol>
+        </div>
+        <div class="content" id="user-content">
+            <ol>
+                <li>待显示</li>
+                <li>待显示</li>
+                <li>待显示</li>
+                <li>待显示</li>
+            </ol>
+            <div></div>
+        </div>
+    </div>
+    <br>
+    <div id="status">
+        状态:
+    </div>
+    <div id="extra"> <button onclick="rePrint()">重新打印</button> </div>
+</div>
+<script src="/static/js/jquery-3.3.1.min.js"></script>
+<script>
+    String.prototype.formatUnicorn = String.prototype.formatUnicorn ||
+        function () {
+            "use strict";
+            var str = this.toString();
+            if (arguments.length) {
+                var t = typeof arguments[0];
+                var key;
+                var args = ("string" === t || "number" === t) ?
+                    Array.prototype.slice.call(arguments)
+                    : arguments[0];
+
+                for (key in args) {
+                    str = str.replace(new RegExp("\\{" + key + "\\}", "gi"), args[key]);
+                }
+            }
+
+            return str;
+        };
+
+    var currentUserInfo;
+    var currentWorkNumberInputStack = "";
+
+    function reset() {
+        currentWorkNumberInputStack = "";
+        currentUserInfo = { "name": "", "company": "", "telephone": "", "meeting": "" , "mark":"", "conference": ""}
+        updateStatus();
+    }
+    function saveNow(data) {
+        currentUserInfo = data;
+    }
+    function updateStatus(msg) {
+        if (msg === undefined) {
+            msg = ""
+        }
+        $("#status").text("状态:" + msg);
+        if ('签到成功' == msg) {
+            $("#status").attr("style", "color:green")
+        } else {
+            $("#status").attr("style", "color:red")
+        }
+    }
+
+    function renderUserInfo(data) {
+        $("#user-content").html(`<ol>
+                    <li>{user_name}</li>
+                    <li>{company}</li>
+                    <li>{phone}</li>
+                    <li>{mark}</li>
+                </ol>`.formatUnicorn(
+            { "user_name": data.name, "company": data.company, "phone": data.telephone,  "mark":data.mark, "signed":data.signed }
+            )
+        );
+    }
+    function queryAndUpdateUserInfo(work_number) {
+        $.ajax({
+            url: "/api/sign",
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({ "sign_type": 3, "keyword": work_number })
+        }).done(function (resp) {
+            let data = resp.data;
+            if (!data) {
+                updateStatus(resp.msg);
+                return;
+            }
+            saveNow(data); // 存一下, 重新打印需要
+            console.log(data)
+            if (data.signed == 0)  {
+                renderUserInfo(currentUserInfo);
+                updateStatus("签到成功");
+                rePrint();
+            } else {
+                updateStatus("已签到");
+            }
+        }).fail(function () {
+            updateStatus("没有查到该用户");
+        }).always(function () {
+            renderUserInfo(currentUserInfo);
+        });
+    }
+    function rePrint() {
+        if (currentUserInfo.name == "" || currentUserInfo.telephone == "") {
+            updateStatus("用户信息不完整，不能打印")
+        } else {
+            $.ajax({
+                url: "http://127.0.0.1:9999/api/print",
+                type: "POST",
+                contentType: "application/json",
+                data: JSON.stringify({ "name": currentUserInfo.name, "company": currentUserInfo.company, "telephone": currentUserInfo.telephone, "meeting":currentUserInfo.meeting, "conference":currentUserInfo.conference })
+            }).done(() => {
+                updateStatus("为" + currentUserInfo.name + "打印完成");
+            }).fail(() => {
+                updateStatus("为" + currentUserInfo.name + "打印失败");
+            })
+        }
+    }
+    setInterval('reloadSignedNum()',15000);
+    function reloadSignedNum(){
+        $.ajax({
+            url: "/api/getNum",
+            type: "POST",
+            contentType: "application/json",
+           }).done(function (resp) {
+            let data = resp.data
+            $("#signedNumber").val(data)
+        })
+    }
+
+    $(window).on("load", function () {
+
+        let loc = window.location, new_uri;
+        if (loc.protocol === "https:") {
+            new_uri = "wss:";
+        } else if (loc.protocol === "http:") {
+            new_uri = "ws:";
+        } else {
+            console.log("not support protocol");
+            return
+        }
+        new_uri += "//" + loc.host;
+        new_uri += "/ws/wait";
+
+        window.Gsocket = new WebSocket(new_uri);
+
+        // Connection opened
+        window.Gsocket.addEventListener('open', function (event) {
+            Gsocket.send('Hello Server!');
+            console.log("connect to ws")
+        });
+        window.Gsocket.addEventListener("close", function (e) {
+            console.log("disconnect to ws")
+        });
+        // Listen for messages
+        window.Gsocket.addEventListener('message', function (event) {
+            // console.log('Message from server ', event.data);
+            renderUserInfo(JSON.parse(event.data));
+            if (currentUserInfo.signed == 0) {
+                rePrint();
+            }
+        });
+        reset();
+    });
+    $(window).on("unload", function () {
+        if (window["Gsocket"] != undefined)
+            window.Gsocket.close();
+    });
+    $("body").on("keydown", (event) => {
+        let key = event.key;
+        if (key === "Escape") {
+            reset();
+        } else if (key === "Enter") {
+            let work_number = $("#work_number").val();
+            reset();
+            queryAndUpdateUserInfo(work_number);
+            $("#work_number").val('');
+        } else if (key === "Unidentified") {
+
+        } else if (RegExp(`^[a-z0-9]{1}$`).test(key)) {
+            currentWorkNumberInputStack+=key;
+        } else {
+            console.log("key is : " + key + " ignored.")
+            return true;
+        }
+    });
+</script>
+</body>
+
+</html>
